@@ -113,8 +113,6 @@ class classifier:
         score = grid_search.best_estimator_.score(X,Y)
         print("f1_weighted score : ", score)
 
-
-
         self.save_model_joblib("model.pkl", grid_search.best_estimator_)
         self.save_model_pickle("model.pkl", grid_search.best_estimator_)
         self.save_model_onnx("model.onnx", grid_search.best_estimator_)
@@ -158,7 +156,7 @@ class classifier:
             print( "Mask: " + str(np.round(mask_perc,1)) )
             cv2.waitKey(0)
 
-    def test_real_time(self):
+    def test_real_time_onnx(self):
         # Image has to be in range 0-255
         model_sess = self.load_model_onnx("model.onnx")
         input_name = model_sess.get_inputs()[0].name
@@ -180,6 +178,43 @@ class classifier:
             im = im[np.newaxis,:]
             res = model_sess.run([label_name], {input_name: im.astype(np.float32)})[0]
           
+            # Assume that there is only one face
+            mask_perc = res[0][0]
+            no_mask_perc = res[0][1]
+
+            # Display the resulting frame
+            cv2.putText(frame, "Mask: " + str(np.round(mask_perc,1))  ,(10,30), cv2.FONT_HERSHEY_COMPLEX,1, (0,255,0),1)
+            cv2.imshow('frame',frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+        # When everything done, release the capture
+        cap.release()
+        cv2.destroyAllWindows()
+
+    def test_real_time_pickle(self):
+        # Image has to be in range 0-255
+        model = self.load_model_joblib("model.pkl")
+        model = self.load_model_pickle("model.pkl")
+        label = model.predict(X)
+
+        cap = cv2.VideoCapture(0)
+        while(True):
+            # Capture frame-by-frame
+            ret, frame = cap.read()
+
+            height, width, channels = frame.shape
+            upper_left = (int(width / 3), int(height / 4))
+            bottom_right = (int(width * 2.5 / 4), int(height * 3 / 4))
+            cv2.rectangle(frame, upper_left, bottom_right, (255, 0, 0), 2)
+            roi = frame[upper_left[1] : bottom_right[1], upper_left[0] : bottom_right[0]]
+
+            im = cv2.resize(roi, (self.size,self.size), interpolation = cv2.INTER_AREA)
+            im = im.reshape(self.size*self.size*self.channel)
+            im = im[np.newaxis,:]
+            im = im.astype(np.float32)
+            
+            res = model.predict_proba(im)
             # Assume that there is only one face
             mask_perc = res[0][0]
             no_mask_perc = res[0][1]
@@ -240,7 +275,9 @@ if __name__ == "__main__":
     print("[TEST]")
     #cl.test_pickle(X)
     #cl.test_onnx(X)
-    cl.test_real_time()
+    cl.test_real_time_pickle()
+    #cl.test_real_time_onnx()
+    
 
 
     
